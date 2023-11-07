@@ -2,83 +2,42 @@
 This module takes care of starting the API Server, Loading the DB and Adding the endpoints
 """
 import os
-from flask import Flask, request, jsonify, url_for, Response
+from flask import Flask, request, jsonify, url_for
 from flask_cors import CORS
 from utils import APIException, generate_sitemap
-from datastructures import FamilyStructure
+from flask import Flask, jsonify, request
+from datastructures import Family
+
 
 
 app = Flask(__name__)
-app.url_map.strict_slashes = False
-CORS(app)
-
-# create the jackson family object
-jackson_family = FamilyStructure("Jackson")
-
-# Handle/serialize errors like a JSON object
-@app.errorhandler(APIException)
-def handle_invalid_usage(error):
-    return jsonify(error.to_dict()), error.status_code
-
-# generate sitemap with all your endpoints
-@app.route('/')
-def sitemap():
-    return generate_sitemap(app)
+jackson_family = Family('Jackson')
 
 @app.route('/members', methods=['GET'])
-def handle_hello():
+def get_all_members():
+    return jsonify(jackson_family.get_all_members()), 200
 
-    members = jackson_family.get_all_members()
-    return jsonify(members), 200
-
-
-@app.route('/member/<int:member_id>', methods=['GET', 'DELETE'])
-def handle_member_by_id(member_id):
-        
-    id = member_id
-
-    if request.method == 'GET':
-        response_body = jackson_family.get_member(id)
-        if response_body == None:
-            return jsonify({"msg": "not born yet"}), 400
-        else:
-            return jsonify(response_body), 200
-
-    if request.method == 'DELETE':
-        result = jackson_family.delete_member(id)
-        response_body = {
-            "msg": "successful: member deleted",
-            "current_members": result,
-            "done": True
-        }
-        return jsonify(response_body), 200
-
+@app.route('/member/<int:member_id>', methods=['GET'])
+def get_member(member_id):
+    member = jackson_family.get_member(member_id)
+    if member:
+        return jsonify(member), 200
+    return jsonify({'error': 'Member not found'}), 404
 
 @app.route('/member', methods=['POST'])
-def handle_add_member():
+def add_member():
+    data = request.json
+    if data:
+        jackson_family.add_member(data)
+        return jsonify({'status': 'Member added'}), 200
+    return jsonify({'error': 'Invalid data provided'}), 400
 
-    member_id = request.json.get('id', jackson_family._generateId())
-    first_name = request.json.get('first_name', None)
-    age = request.json.get('age', None)
-    lucky_numbers = request.json.get('lucky_numbers', None)
+@app.route('/member/<int:member_id>', methods=['DELETE'])
+def delete_member(member_id):
+    jackson_family.delete_member(member_id)
+    return jsonify({'done': True}), 200
 
-    new_member = {
-                "id": member_id,
-                "first_name": first_name,
-                "last_name": "Jackson",
-                "age": age,
-                "lucky_numbers": lucky_numbers
-    }
-
-    if member_id is not None or first_name is not None or age is not None or lucky_numbers is not None:
-        result = jackson_family.add_member(new_member)
-        return jsonify(result), 200
-    else:
-        return jsonify('please insert valid data'), 400
-    
-
-
-
+# this only runs if `$ python src/app.py` is executed
 if __name__ == '__main__':
     PORT = int(os.environ.get('PORT', 3000))
     app.run(host='0.0.0.0', port=PORT, debug=True)
